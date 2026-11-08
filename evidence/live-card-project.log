@@ -1,0 +1,20 @@
+/Users/may/Documents/ChatGPT/fpui-paint-inject/target/Zed.app: replacing existing signature
+paint-spike: source identity, private text hash, and entry verified
+paint-spike: main image base=0x1022cc000
+paint-spike: armed entry=0x1045fbd20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: main image base=0x100b14000
+paint-spike: host hit=0 window=0x16db2b2e8 bounds=[0.0, 0.0, 1536.0, 1044.0] scale=2 quads=1
+paint-spike: host hit=1 window=0x16db2b2e8 bounds=[0.0, 0.0, 1536.0, 1044.0] scale=2 quads=5
+paint-spike: host hit=2 window=0x16db2b2e8 bounds=[0.0, 1044.0, 1536.0, 30.0] scale=2 quads=6
+paint-spike: host hit=3 window=0x16db2b2e8 bounds=[28.0, 1051.0, 1.0, 16.0] scale=2 quads=7
+paint-spike: host hit=4 window=0x78732d1000 bounds=[0.0, 0.0, 1536.0, 34.0] scale=2 quads=1
+paint-spike: host hit=5 window=0x78732d1000 bounds=[80.0, 6.0, 115.0, 22.0] scale=2 quads=2
+paint-spike: card frame=1 quad_delta=0 at=[320,160] prev_max=13
+paint-spike: card frame=2 quad_delta=3 at=[320,160] prev_max=51
+paint-spike: card frame=3 quad_delta=0 at=[320,160] prev_max=51
+paint-spike: card frame=4 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: armed entry=0x102e43d20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: card frame=8 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: card frame=16 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: card frame=32 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: bounded run ended; child=-15

@@ -1,0 +1,28 @@
+/Users/may/Documents/ChatGPT/fpui-paint-inject/target/Zed.app: replacing existing signature
+paint-spike: source identity, private text hash, and entry verified
+paint-spike: main image base=0x100624000
+paint-spike: paint_image armed at 0x102954fd4
+[fpui-cat] attached settings_data @ 0x10551b6dc image [0x100624000,0x10af20000)
+paint-spike: armed entry=0x102953d20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: main image base=0x104074000
+paint-spike: host hit=0 window=0x16f7d3298 bounds=[0.0, 0.0, 1536.0, 1044.0] scale=2 quads=1
+paint-spike: host hit=1 window=0x16f7d3298 bounds=[0.0, 0.0, 1536.0, 1044.0] scale=2 quads=5
+paint-spike: host hit=2 window=0x16f7d3298 bounds=[0.0, 1044.0, 1536.0, 30.0] scale=2 quads=6
+paint-spike: host hit=3 window=0x16f7d3298 bounds=[28.0, 1051.0, 1.0, 16.0] scale=2 quads=7
+paint-spike: host hit=4 window=0x7ba74e3800 bounds=[0.0, 0.0, 1536.0, 34.0] scale=2 quads=1
+paint-spike: host hit=5 window=0x7ba74e3800 bounds=[80.0, 6.0, 115.0, 22.0] scale=2 quads=2
+paint-spike: sprite block 128x128 id=0x6670756900000001 block=0x7ba67b11a0
+paint-spike: sprite block 286x43 id=0x6670756900000002 block=0x7ba67b12c0
+paint-spike: sprite block 594x28 id=0x6670756900000003 block=0x7ba67b1320
+paint-spike: sprite block 27x32 id=0x6670756900000004 block=0x7ba67b1380
+paint-spike: sprite block 75x30 id=0x6670756900000005 block=0x7ba67b13e0
+paint-spike: card frame=1 quad_delta=0 at=[320,160] prev_max=13
+paint-spike: card frame=2 quad_delta=3 at=[320,160] prev_max=51
+paint-spike: card frame=3 quad_delta=3 at=[320,160] prev_max=51
+paint-spike: card frame=4 quad_delta=3 at=[320,160] prev_max=51
+paint-spike: card frame=8 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: card frame=16 quad_delta=3 at=[320,160] prev_max=97
+paint-spike: paint_image armed at 0x1063a4fd4
+[fpui-cat] attached settings_data @ 0x108f6b6dc image [0x104074000,0x10e970000)
+paint-spike: armed entry=0x1063a3d20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: bounded run ended; child=-15

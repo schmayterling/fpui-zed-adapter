@@ -1,0 +1,9 @@
+/Users/may/Documents/ChatGPT/fpui-paint-inject/target/Zed.app: replacing existing signature
+paint-spike: source identity, private text hash, and entry verified
+paint-spike: main image base=0x100438000
+paint-spike: armed entry=0x102767d20 mode=once rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: main image base=0x100e54000
+paint-spike: host hit=0 window=0x16f9bef40 bounds=[0.0, 0.0, 1536.0, 1065.0] scale=2 quads=1
+paint-spike: appended=1 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2190.0] hsla=[0.77, 0.82, 0.56, 1.0] order=2
+paint-spike: armed entry=0x103183d20 mode=once rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: bounded run ended; child=-15

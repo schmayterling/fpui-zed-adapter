@@ -1,0 +1,26 @@
+{
+  "source_sha256": "c9cc93ccb1f84d308f5bf39caed8c5a3f4179fd32af6d2f86e89414662fa403a",
+  "mach_uuid": "D1136556-64FF-3889-B72D-2AC16AC81B46",
+  "text_offset": 6912,
+  "text_size": 115898472,
+  "text_sha256": "8b65c30d8cafa55f703bbd790b0ce69931e8cc1560f1c7780122c7e0e32da980",
+  "paint_quad_offset": 36896032,
+  "paint_quad_bytes": "ef3bb66ded33016deb2b026de923036dfc6f04a9fa6705a9f85f06a9f65707a9",
+  "scene_insert_offset": 35420520,
+  "paint_image_offset": 36900820,
+  "paint_image_bytes": "ff8304d1ef3b0a6ded330b6deb2b0c6de9230d6df85f0ea9f6570fa9f44f10a9",
+  "scene_offset": 896,
+  "quads_vec_offset": 176,
+  "paint_ops_vec_offset": 104,
+  "scale_offset": 8832,
+  "paint_quad_layout": {
+    "size": 140,
+    "align": 4,
+    "border_style": 0,
+    "background": 4,
+    "bounds": 76,
+    "corner_radii": 92,
+    "border_widths": 108,
+    "border_color": 124
+  }
+}

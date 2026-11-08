@@ -1,0 +1,23 @@
+/Users/may/Documents/ChatGPT/fpui-paint-inject/target/Zed.app: replacing existing signature
+paint-spike: source identity, private text hash, and entry verified
+paint-spike: main image base=0x102fdc000
+paint-spike: armed entry=0x10530bd20 mode=cover rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: main image base=0x102958000
+paint-spike: host hit=0 window=0x16ce1af40 bounds=[0.0, 0.0, 1536.0, 1065.0] scale=2 quads=1
+paint-spike: appended=1 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2190.0] hsla=[0.77, 0.82, 0.56, 1.0] order=2
+paint-spike: host hit=1 window=0x16ce1af40 bounds=[0.0, 1.0, 1536.0, 1063.0] scale=2 quads=3
+paint-spike: appended=2 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 2.0, 3072.0, 2126.0] hsla=[0.77, 0.82, 0.56, 1.0] order=4
+paint-spike: host hit=2 window=0x16ce1af40 bounds=[623.0, 381.5, 365.0, 1.0] scale=2 quads=5
+paint-spike: host hit=3 window=0x16ce1af40 bounds=[611.0, 541.5, 377.0, 1.0] scale=2 quads=6
+paint-spike: host hit=4 window=0x16ce1af40 bounds=[544.0, 666.0, 448.0, 109.5] scale=2 quads=7
+paint-spike: host hit=5 window=0x16ce1af40 bounds=[553.0, 744.5, 430.0, 22.0] scale=2 quads=8
+paint-spike: appended=3 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2190.0] hsla=[0.77, 0.82, 0.56, 1.0] order=5
+paint-spike: appended=4 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2190.0] hsla=[0.77, 0.82, 0.56, 1.0] order=2
+paint-spike: appended=5 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 70.0, 3072.0, 2058.0] hsla=[0.77, 0.82, 0.56, 1.0] order=4
+paint-spike: appended=6 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2190.0] hsla=[0.77, 0.82, 0.56, 1.0] order=5
+paint-spike: appended=7 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 0.0, 3072.0, 2148.0] hsla=[0.77, 0.82, 0.56, 1.0] order=2
+paint-spike: appended=8 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 134.0, 3072.0, 1952.0] hsla=[0.77, 0.82, 0.56, 1.0] order=4
+paint-spike: armed entry=0x104c87d20 mode=cover rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: appended=16 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 134.0, 3072.0, 1952.0] hsla=[0.77, 0.82, 0.56, 1.0] order=4
+paint-spike: appended=32 quad_delta=1 op_delta=1 payload_ok=true bounds=[720.0, 280.0, 480.0, 192.0] clip=[0.0, 134.0, 3072.0, 1952.0] hsla=[0.77, 0.82, 0.56, 1.0] order=4
+paint-spike: bounded run ended; child=-15
