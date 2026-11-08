@@ -665,6 +665,8 @@ mod settings_category {
     pub static FPUI_ITEMS_PTR: AtomicU64 = AtomicU64::new(0);
     // Cached offset of the sub_page_stack data ptr inside SettingsWindow (0 = not yet found).
     static SUBPAGE_PTR_OFF: AtomicUsize = AtomicUsize::new(0);
+    // Last sub-page title logged, so the gate prints once per transition (not every frame).
+    static LAST_SUBPAGE: AtomicU32 = AtomicU32::new(0);
 
     // Detour on the shared SubPageLink render fn. woah + debug share this fn, so to route
     // card-vs-panel we read the ACTIVE sub-page's title off the live &SettingsWindow (x0) and
@@ -676,10 +678,16 @@ mod settings_category {
             let now = super::now_ms();
             LAST_RENDER_MS.store(now, Ordering::Relaxed);
             let sw = c.cpu_context().reg(0); // x0 = &SettingsWindow
-            match unsafe { active_subpage_title(sw) } {
+            let t = unsafe { active_subpage_title(sw) };
+            match t {
                 1 => WOAH_MS.store(now, Ordering::Relaxed),
                 2 => DEBUG_MS.store(now, Ordering::Relaxed),
                 _ => {}
+            }
+            // Log once per transition so "woah render fired" is an explicit, unspammed signal.
+            if LAST_SUBPAGE.swap(t as u32, Ordering::Relaxed) != t as u32 {
+                let name = match t { 1 => "woah -> Support card", 2 => "debug -> state panel", _ => "other/none" };
+                eprintln!("[fpui-gate] sub-page render fired: {name} (sw={sw:#x})");
             }
         }
         fn on_leave(&mut self, _c: InvocationContext) {}
