@@ -834,9 +834,11 @@ impl InvocationListener for CaptureGate {
         // Style arg will show small enum/f32 bytes at offset 0, letting us pick the right reg + ABI.
         for (i, &r) in regs.iter().enumerate() {
             if (0x1_0000_0000..0x8000_0000_0000).contains(&r) && r % 4 == 0 {
+                // x0 for candB/request_layout is &{Style(632B), ..}; dump enough to grab the Style.
+                let n = if i == 0 { 672 } else { 96 };
                 let p = r as *const u8;
-                let mut s = String::with_capacity(128);
-                for k in 0..64usize {
+                let mut s = String::with_capacity(n * 2);
+                for k in 0..n {
                     s.push_str(&format!("{:02x}", unsafe { p.add(k).read() }));
                 }
                 eprintln!("[fpui-cap]   x{i}={r:#x} -> {s}");
