@@ -715,6 +715,9 @@ mod native_element {
 
     // Static arena-sidestep RcBox: ArenaBox.valid derefs to value @ +16 (RcBox = {strong, weak,
     // value}); pinned-high counts so the per-drop decrement never frees.
+    // MUST be WRITABLE: Rc clone/drop mutates strong/weak in place — a read-only static faults
+    // (SIGBUS KERN_PROTECTION_FAILURE) on the first refcount write. UnsafeCell forces writable
+    // placement (__DATA, not __const); counts pinned 1<<40 so they never reach 0 within a session.
     #[repr(C, align(16))]
     struct FakeRcBox {
         strong: usize,
@@ -722,7 +725,14 @@ mod native_element {
         value: u8,
         _pad: [u8; 7],
     }
-    static FAKE_VALID: FakeRcBox = FakeRcBox { strong: 1 << 40, weak: 1 << 40, value: 1, _pad: [0; 7] };
+    struct ValidCell(std::cell::UnsafeCell<FakeRcBox>);
+    unsafe impl Sync for ValidCell {}
+    static FAKE_VALID: ValidCell = ValidCell(std::cell::UnsafeCell::new(FakeRcBox {
+        strong: 1 << 40,
+        weak: 1 << 40,
+        value: 1,
+        _pad: [0; 7],
+    }));
 
     // A word looks like an ElementObject vtable if its drop_in_place slot (vtable[0]) lands in the
     // main image's __text and size/align (vtable[1..3]) are sane. All 3 words of a real returned
@@ -762,7 +772,7 @@ mod native_element {
         CHILD_VT.store(words[vt_idx], Ordering::Relaxed);
         w.add(data_idx).write(&ELEM_MARKER as *const u8 as usize);
         w.add(vt_idx).write(&VTABLE as *const Vtable as usize);
-        w.add(valid_idx).write(&FAKE_VALID as *const FakeRcBox as usize);
+        w.add(valid_idx).write(FAKE_VALID.0.get() as usize);
     }
 }
 
