@@ -2,6 +2,8 @@
 
 experimental runtime adapter for fpui. injects a rust dylib into a private copy of zed, hooks its paint path, and adds an `fpui` settings category with `woah` and `debug` pages.
 
+<img width="2024" height="1724" alt="image" src="https://github.com/user-attachments/assets/0c629574-0bfc-4bec-b58f-4338a4ab412d" />
+
 ## requirements
 
 - macos on apple silicon (arm64).
