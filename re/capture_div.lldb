@@ -1,0 +1,10 @@
+breakpoint set -a 0x107a379c8
+breakpoint command add
+script print("=== AnyElement @ sp+0x2010 (w0=Drawable ptr, w1=VTABLE, w2=Rc) ===")
+memory read -s8 -c3 -fx `$sp+0x2010`
+script print("=== Drawable<Div> (first 384B) ===")
+memory read -s8 -c48 -fx `*(unsigned long*)($sp+0x2010)`
+breakpoint delete 1
+process detach
+DONE
+continue
