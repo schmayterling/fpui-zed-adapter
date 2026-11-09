@@ -1,0 +1,9 @@
+breakpoint set -a 0x107a3bf20
+breakpoint command add
+frame info
+register read x16 x4 x30 x0 x1
+thread backtrace -c 5
+process detach
+quit
+DONE
+continue

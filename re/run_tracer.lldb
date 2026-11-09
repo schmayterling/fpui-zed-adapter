@@ -1,0 +1,4 @@
+command script import /Users/may/Documents/ChatGPT/fpui-paint-inject/re/div_tracer.py
+breakpoint set -a 0x107a35e9c
+breakpoint command add -F div_tracer.on_render
+continue
