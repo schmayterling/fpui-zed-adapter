@@ -51,6 +51,18 @@ struct Adapter {
     paint_image_offset: usize,
     #[serde(default)]
     paint_image_bytes: String,
+    // Path-3 native element (0=off, 1=wrap, 2=standalone). The standalone fields are filled
+    // from the one live lldb capture (NATIVE-ELEMENTS.md "SINGLE LIVE EXPERIMENT"); wrap needs none.
+    #[serde(default)]
+    native_mode: u8,
+    #[serde(default)]
+    native_engine_req_layout_offset: usize, // runtime = base + this (TaffyLayoutEngine::request_layout)
+    #[serde(default)]
+    native_style_hex: String,               // captured ~632B gpui Style (heap-free/default-shaped)
+    #[serde(default)]
+    native_win_engine_off: usize,           // Window offset: layout_engine Box ptr
+    #[serde(default)]
+    native_win_rem_off: usize,              // Window offset: rem_size f32
 }
 
 struct State {
@@ -483,11 +495,15 @@ unsafe extern "C" fn paint_hook(window: *mut u8, quad: *mut u8) {
             // woah sub-page -> Support-The-Project card; debug sub-page -> real-state panel.
             // Each owns its whole sub-page, so neither is offset below the other.
             if on_woah {
-                for (rect, hsla, radius) in card_quads(ox, oy) {
-                    let mut qb = quad_bytes(rect, hsla, radius);
-                    original(window, qb.0.as_mut_ptr().cast());
+                // When the Path-3 native element is active it paints the woah card itself (native
+                // paint phase) — skip the hook fallback here so the card isn't drawn twice.
+                if !native_element::active() {
+                    for (rect, hsla, radius) in card_quads(ox, oy) {
+                        let mut qb = quad_bytes(rect, hsla, radius);
+                        original(window, qb.0.as_mut_ptr().cast());
+                    }
+                    draw_card_sprites(window, ox, oy);
                 }
-                draw_card_sprites(window, ox, oy);
             } else {
                 for (rect, hsla, radius) in debug_quads(ox, oy) {
                     let mut qb = quad_bytes(rect, hsla, radius);
@@ -543,6 +559,211 @@ unsafe extern "C" fn paint_hook(window: *mut u8, quad: *mut u8) {
         }
     }
     IN_HOOK.with(|flag| flag.set(false));
+}
+
+// Draw the fpui card into Zed's live scene at its anchored origin, using the proven re-invoke
+// seam (ORIGINAL = paint_quad trampoline, bypasses the hook so no reentrancy). Shared by the
+// paint_quad-hook fallback and the native element's paint phase.
+unsafe fn draw_native_card(window: *mut u8) {
+    let Some(state) = STATE.get() else { return };
+    let orig = ORIGINAL.load(Ordering::Acquire);
+    if orig == 0 { return; }
+    let original: PaintFn = std::mem::transmute(orig);
+    let ww = f32::from_bits(WIN_W.load(Ordering::Relaxed));
+    let wh = f32::from_bits(WIN_H.load(Ordering::Relaxed));
+    let [ox, oy] = if state.anchor != "fixed" && ww > 0.0 && wh > 0.0 {
+        anchor_origin(&state.anchor, ww, wh, 600.0, 170.0)
+    } else {
+        state.card_xy
+    };
+    for (rect, hsla, radius) in card_quads(ox, oy) {
+        let mut qb = quad_bytes(rect, hsla, radius);
+        original(window, qb.0.as_mut_ptr().cast());
+    }
+    draw_card_sprites(window, ox, oy);
+}
+
+// ===== Path 3: native gpui element (hand-built ElementObject vtable) =====
+// A `dyn ElementObject` is a fat ptr {data, vtable}. We define our own element + hand-build the
+// 8-entry vtable pointing at our extern fns, then make on_leave on the woah sub-page's render fn
+// overwrite the returned AnyElement with ours. Two modes:
+//   WRAP (mode 1, capture-free): stash the real child, delegate request_layout/prepaint/paint to
+//     its vtable, then add our card in paint. Proves the hand-built vtable + native paint phase
+//     (right z-order, once/frame, no cover-mode occlusion hack). No captured values needed.
+//   STANDALONE (mode 2): our request_layout calls Zed's TaffyLayoutEngine::request_layout with a
+//     captured gpui Style so the card occupies its OWN layout box (real reflow). Behind the five
+//     values from the one live capture (engine fn addr, Style bytes, Window offsets).
+// Arena-sidestep (proven, arena.rs:218-250): AnyElement = ArenaBox{ptr:fat(&ELEM,&VTABLE),
+// valid:Rc}. ArenaBox::deref only `assert!(valid.get())`; a static fake RcBox with pinned-high
+// counts derefs forever and survives the drop-decrement without freeing. No gpui arena needed.
+mod native_element {
+    use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+    use std::sync::OnceLock;
+
+    // Captured-at-live-layout values (unset until the 2-min lldb capture; loaded from the adapter).
+    pub static MODE: AtomicU8 = AtomicU8::new(0); // 0 off, 1 wrap, 2 standalone
+    pub static ENGINE_REQ_LAYOUT: AtomicUsize = AtomicUsize::new(0); // runtime TaffyLayoutEngine::request_layout
+    pub static WIN_ENGINE_OFF: AtomicUsize = AtomicUsize::new(usize::MAX); // Window off: layout_engine Box ptr
+    pub static WIN_REM_OFF: AtomicUsize = AtomicUsize::new(usize::MAX);    // Window off: rem_size f32
+    pub static WIN_SCALE_OFF: AtomicUsize = AtomicUsize::new(usize::MAX);  // Window off: scale_factor f32
+    pub static STYLE: OnceLock<Vec<u8>> = OnceLock::new();                 // captured gpui Style template
+    pub static IMG_LO: AtomicUsize = AtomicUsize::new(0); // main-image __text lo (vtable detection)
+    pub static IMG_HI: AtomicUsize = AtomicUsize::new(0); // main-image __text hi
+
+    pub fn wrap_active() -> bool { MODE.load(Ordering::Relaxed) == 1 }
+    pub fn standalone_ready() -> bool {
+        MODE.load(Ordering::Relaxed) == 2
+            && ENGINE_REQ_LAYOUT.load(Ordering::Relaxed) != 0
+            && STYLE.get().is_some()
+            && WIN_ENGINE_OFF.load(Ordering::Relaxed) != usize::MAX
+            && WIN_REM_OFF.load(Ordering::Relaxed) != usize::MAX
+            && WIN_SCALE_OFF.load(Ordering::Relaxed) != usize::MAX
+    }
+    pub fn active() -> bool { wrap_active() || standalone_ready() }
+
+    // Real child element stashed by inject() for WRAP delegation. One card, one sub-page, main
+    // thread, synchronous render->layout->paint => a single slot is race-free for v1.
+    static CHILD_DATA: AtomicUsize = AtomicUsize::new(0);
+    static CHILD_VT: AtomicUsize = AtomicUsize::new(0);
+    // Our element's "data" ptr: a 1-byte marker (our fns read statics, not instance data).
+    static ELEM_MARKER: u8 = 0;
+
+    // The hand-built ElementObject vtable. Rust trait-object layout = [drop_in_place, size, align,
+    // then methods in declaration order]: inner_element, request_layout, prepaint, paint,
+    // layout_as_root (element.rs ElementObject). All dyn methods verified: (self, window, cx).
+    #[repr(C)]
+    struct Vtable {
+        drop_in_place: unsafe extern "C" fn(*mut u8),
+        size: usize,
+        align: usize,
+        inner_element: unsafe extern "C" fn(*mut u8) -> DynAnyRef,
+        request_layout: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8) -> usize,
+        prepaint: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8),
+        paint: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8),
+        layout_as_root: unsafe extern "C" fn(*mut u8, usize, usize, *mut u8, *mut u8) -> u64,
+    }
+    static VTABLE: Vtable = Vtable {
+        drop_in_place: el_drop,
+        size: 1,
+        align: 1,
+        inner_element: el_inner,
+        request_layout: el_request_layout,
+        prepaint: el_prepaint,
+        paint: el_paint,
+        layout_as_root: el_layout_as_root,
+    };
+
+    #[inline]
+    unsafe fn child_slot(vt: usize, idx: usize) -> usize { (vt as *const usize).add(idx).read() }
+
+    // &mut dyn Any fat pointer (data, vtable) returned in x0:x1.
+    #[repr(C)]
+    struct DynAnyRef(usize, usize);
+
+    unsafe extern "C" fn el_drop(_self: *mut u8) {} // static element; never truly dropped
+    unsafe extern "C" fn el_inner(self_: *mut u8) -> DynAnyRef { DynAnyRef(self_ as usize, 0) } // stub (downcast only)
+    unsafe extern "C" fn el_layout_as_root(_s: *mut u8, _w: usize, _h: usize, _win: *mut u8, _cx: *mut u8) -> u64 {
+        0 // stub: only roots call this; our card is a child
+    }
+
+    unsafe extern "C" fn el_request_layout(_self: *mut u8, window: *mut u8, cx: *mut u8) -> usize {
+        if wrap_active() {
+            let (cd, cv) = (CHILD_DATA.load(Ordering::Relaxed), CHILD_VT.load(Ordering::Relaxed));
+            if cd == 0 || cv == 0 { return 0; }
+            let f: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8) -> usize =
+                std::mem::transmute(child_slot(cv, 4));
+            return f(cd as *mut u8, window, cx); // real child's LayoutId
+        }
+        if !standalone_ready() { return 0; }
+        // engine.request_layout(engine, &Style, rem, scale, &[]) -> LayoutId. The callee takes the
+        // Style by value + drops it, so hand it a fresh owned copy (template must be heap-free).
+        #[repr(C, align(16))]
+        struct Buf([u8; 1024]);
+        let style = STYLE.get().unwrap();
+        let mut buf = Buf([0; 1024]);
+        let n = style.len().min(1024);
+        std::ptr::copy_nonoverlapping(style.as_ptr(), buf.0.as_mut_ptr(), n);
+        let engine = (window.add(WIN_ENGINE_OFF.load(Ordering::Relaxed)) as *const usize).read_unaligned();
+        let rem = (window.add(WIN_REM_OFF.load(Ordering::Relaxed)) as *const f32).read_unaligned();
+        let scale = (window.add(WIN_SCALE_OFF.load(Ordering::Relaxed)) as *const f32).read_unaligned();
+        // C ABI: x0=engine, x1=&Style, s0=rem, s1=scale, x2=children.ptr, x3=children.len.
+        let f: unsafe extern "C" fn(usize, *const u8, f32, f32, *const u8, usize) -> usize =
+            std::mem::transmute(ENGINE_REQ_LAYOUT.load(Ordering::Relaxed));
+        f(engine, buf.0.as_ptr(), rem, scale, std::ptr::null(), 0)
+    }
+
+    unsafe extern "C" fn el_prepaint(_self: *mut u8, window: *mut u8, cx: *mut u8) {
+        if wrap_active() {
+            let (cd, cv) = (CHILD_DATA.load(Ordering::Relaxed), CHILD_VT.load(Ordering::Relaxed));
+            if cd != 0 && cv != 0 {
+                let f: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8) = std::mem::transmute(child_slot(cv, 5));
+                f(cd as *mut u8, window, cx);
+            }
+        }
+    }
+
+    unsafe extern "C" fn el_paint(_self: *mut u8, window: *mut u8, cx: *mut u8) {
+        if wrap_active() {
+            let (cd, cv) = (CHILD_DATA.load(Ordering::Relaxed), CHILD_VT.load(Ordering::Relaxed));
+            if cd != 0 && cv != 0 {
+                let f: unsafe extern "C" fn(*mut u8, *mut u8, *mut u8) = std::mem::transmute(child_slot(cv, 6));
+                f(cd as *mut u8, window, cx); // real content paints first
+            }
+        }
+        super::draw_native_card(window); // our card, in the native paint phase
+    }
+
+    // Static arena-sidestep RcBox: ArenaBox.valid derefs to value @ +16 (RcBox = {strong, weak,
+    // value}); pinned-high counts so the per-drop decrement never frees.
+    #[repr(C, align(16))]
+    struct FakeRcBox {
+        strong: usize,
+        weak: usize,
+        value: u8,
+        _pad: [u8; 7],
+    }
+    static FAKE_VALID: FakeRcBox = FakeRcBox { strong: 1 << 40, weak: 1 << 40, value: 1, _pad: [0; 7] };
+
+    // A word looks like an ElementObject vtable if its drop_in_place slot (vtable[0]) lands in the
+    // main image's __text and size/align (vtable[1..3]) are sane. All 3 words of a real returned
+    // AnyElement are valid ptrs (data->arena, vtable->const, valid->heap RcBox), so reading them
+    // can't fault; only the vtable's drop slot points into __text.
+    unsafe fn looks_like_vtable(p: usize, lo: usize, hi: usize) -> bool {
+        if p == 0 || (p & 7) != 0 || lo == 0 { return false; }
+        let drop = (p as *const usize).read();
+        let size = (p as *const usize).add(1).read();
+        let align = (p as *const usize).add(2).read();
+        drop >= lo && drop < hi && size < 0x0010_0000 && align != 0 && align <= 4096 && (align & (align - 1)) == 0
+    }
+
+    // Overwrite the 24-byte AnyElement at the render fn's sret with ours, after stashing the real
+    // child for WRAP delegation. AnyElement = ArenaBox<dyn> = a fat ptr (data, vtable) + a valid Rc,
+    // but repr(Rust) may order them [valid, data, vtable] (local probe) or [data, vtable, valid].
+    // Self-detect: find the vtable slot by signature; data is its fat-ptr partner (immediately
+    // before it), valid is the third. Write ours into the SAME slots — drift-proof.
+    pub unsafe fn inject(sret: *mut u8) {
+        let w = sret as *mut usize;
+        let lo = IMG_LO.load(Ordering::Relaxed);
+        let hi = IMG_HI.load(Ordering::Relaxed);
+        let words = [w.read(), w.add(1).read(), w.add(2).read()];
+        // vtable slot — a fat ptr's vtable can be at index 1 ([data,vtable,valid]) or 2
+        // ([valid,data,vtable]). If NEITHER looks like a vtable the return isn't the AnyElement we
+        // assume (wrong sret/type) — bail rather than scribble over it.
+        let vt_idx = if looks_like_vtable(words[2], lo, hi) {
+            2
+        } else if looks_like_vtable(words[1], lo, hi) {
+            1
+        } else {
+            eprintln!("[fpui-native] inject bail: no vtable in sret {:#x} words={words:#x?}", sret as usize);
+            return;
+        };
+        let (data_idx, valid_idx) = if vt_idx == 1 { (0, 2) } else { (1, 0) };
+        CHILD_DATA.store(words[data_idx], Ordering::Relaxed);
+        CHILD_VT.store(words[vt_idx], Ordering::Relaxed);
+        w.add(data_idx).write(&ELEM_MARKER as *const u8 as usize);
+        w.add(vt_idx).write(&VTABLE as *const Vtable as usize);
+        w.add(valid_idx).write(&FAKE_VALID as *const FakeRcBox as usize);
+    }
 }
 
 fn install() -> Result<(), Box<dyn std::error::Error>> {
@@ -602,6 +823,39 @@ fn install() -> Result<(), Box<dyn std::error::Error>> {
         return Err("invalid card origin".into());
     }
     let anchor = std::env::var("FPUI_CARD_ANCHOR").unwrap_or_else(|_| "fixed".into());
+    // Path-3 native element config (adapter-driven so captured values plug in w/o a recompile).
+    if adapter.native_mode != 0 {
+        native_element::MODE.store(adapter.native_mode, Ordering::Relaxed);
+        native_element::IMG_LO.store(base as usize + adapter.text_offset, Ordering::Relaxed);
+        native_element::IMG_HI
+            .store(base as usize + adapter.text_offset + adapter.text_size, Ordering::Relaxed);
+        if adapter.native_engine_req_layout_offset != 0 {
+            native_element::ENGINE_REQ_LAYOUT
+                .store(base as usize + adapter.native_engine_req_layout_offset, Ordering::Relaxed);
+        }
+        if !adapter.native_style_hex.is_empty() {
+            let bytes: Result<Vec<u8>, _> = (0..adapter.native_style_hex.len())
+                .step_by(2)
+                .map(|i| u8::from_str_radix(&adapter.native_style_hex[i..i + 2], 16))
+                .collect();
+            if let Ok(b) = bytes { let _ = native_element::STYLE.set(b); }
+        }
+        if adapter.native_win_engine_off != 0 {
+            native_element::WIN_ENGINE_OFF.store(adapter.native_win_engine_off, Ordering::Relaxed);
+        }
+        if adapter.native_win_rem_off != 0 {
+            native_element::WIN_REM_OFF.store(adapter.native_win_rem_off, Ordering::Relaxed);
+        }
+        native_element::WIN_SCALE_OFF.store(adapter.scale_offset, Ordering::Relaxed); // reuse known scale offset
+        eprintln!(
+            "[fpui-native] mode={} wrap_active={} standalone_ready={} engine={:#x} style={}B",
+            adapter.native_mode,
+            native_element::wrap_active(),
+            native_element::standalone_ready(),
+            native_element::ENGINE_REQ_LAYOUT.load(Ordering::Relaxed),
+            native_element::STYLE.get().map(|s| s.len()).unwrap_or(0),
+        );
+    }
     settings_category::DEBUG_BASE.store(base as u64, Ordering::Release);
     STATE.set(State { adapter, rect, mode, card_xy, anchor, done: AtomicBool::new(false),
         hits: AtomicUsize::new(0), appends: AtomicUsize::new(0),
@@ -672,17 +926,32 @@ mod settings_category {
     // card-vs-panel we read the ACTIVE sub-page's title off the live &SettingsWindow (x0) and
     // stamp the matching clock. A foreign borrowed sub-page (same fn, different title) stamps
     // neither -> no card. This is the page gate: the card lives only on my fpui sub-pages.
+    // Path-3: render->layout->paint is synchronous on the main thread, so on_enter can hand the
+    // decision + the sret buffer (x8 at entry, before it's clobbered) to on_leave via thread-locals.
+    thread_local! {
+        static PENDING_NATIVE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        static SRET_BUF: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
     struct RenderGate;
     impl InvocationListener for RenderGate {
         fn on_enter(&mut self, c: InvocationContext) {
             let now = super::now_ms();
             LAST_RENDER_MS.store(now, Ordering::Relaxed);
-            let sw = c.cpu_context().reg(0); // x0 = &SettingsWindow
+            let ctx = c.cpu_context();
+            let sw = ctx.reg(0); // x0 = &SettingsWindow
             let t = unsafe { active_subpage_title(sw) };
             match t {
                 1 => WOAH_MS.store(now, Ordering::Relaxed),
                 2 => DEBUG_MS.store(now, Ordering::Relaxed),
                 _ => {}
+            }
+            // Native element injects on the woah sub-page only. Stash x8 (the AnyElement sret
+            // buffer) now — it is clobbered by the time on_leave fires.
+            let inject = t == 1 && super::native_element::active();
+            PENDING_NATIVE.with(|p| p.set(inject));
+            if inject {
+                SRET_BUF.with(|s| s.set(ctx.reg(8) as usize));
             }
             // Log once per transition so "woah render fired" is an explicit, unspammed signal.
             if LAST_SUBPAGE.swap(t as u32, Ordering::Relaxed) != t as u32 {
@@ -690,7 +959,15 @@ mod settings_category {
                 eprintln!("[fpui-gate] sub-page render fired: {name} (sw={sw:#x})");
             }
         }
-        fn on_leave(&mut self, _c: InvocationContext) {}
+        fn on_leave(&mut self, _c: InvocationContext) {
+            if PENDING_NATIVE.with(|p| p.replace(false)) {
+                let sret = SRET_BUF.with(|s| s.get());
+                if sret != 0 {
+                    unsafe { super::native_element::inject(sret as *mut u8) };
+                    eprintln!("[fpui-native] injected AnyElement at sret={sret:#x}");
+                }
+            }
+        }
     }
 
     // Read the active sub-page title from a live &SettingsWindow: 0 = none/foreign, 1 = woah,
