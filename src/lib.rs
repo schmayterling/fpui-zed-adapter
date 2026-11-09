@@ -609,6 +609,28 @@ mod native_element {
     pub static STYLE: OnceLock<Vec<u8>> = OnceLock::new();                 // captured gpui Style template
     pub static IMG_LO: AtomicUsize = AtomicUsize::new(0); // main-image __text lo (vtable detection)
     pub static IMG_HI: AtomicUsize = AtomicUsize::new(0); // main-image __text hi
+    // M2 capture (FPUI_CAPTURE=1): the engine ptr grabbed by a CaptureGate on the request_layout
+    // candidate; el_request_layout then scans its `window` arg to resolve WIN_ENGINE_OFF live.
+    pub static CAPTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    pub static ENG_CAP: AtomicUsize = AtomicUsize::new(0);
+    static WIN_OFF_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+    // In capture mode, once the CaptureGate has the engine ptr, scan our `window` arg for it to
+    // resolve WIN_ENGINE_OFF (the Window offset holding the layout_engine Box ptr).
+    unsafe fn capture_win_scan(window: *mut u8) {
+        let eng = ENG_CAP.load(Ordering::Relaxed);
+        if eng == 0 || WIN_OFF_LOGGED.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let mut hits = 0;
+        for off in (0..0x4000usize).step_by(8) {
+            if (window.add(off) as *const usize).read_unaligned() == eng {
+                eprintln!("[fpui-cap] WIN_ENGINE_OFF={off:#x} ({off})  window={:#x} engine={eng:#x}", window as usize);
+                hits += 1;
+            }
+        }
+        eprintln!("[fpui-cap] window scan done: engine={eng:#x} hits={hits}");
+    }
 
     pub fn wrap_active() -> bool { MODE.load(Ordering::Relaxed) == 1 }
     pub fn standalone_ready() -> bool {
@@ -667,6 +689,9 @@ mod native_element {
     }
 
     unsafe extern "C" fn el_request_layout(_self: *mut u8, window: *mut u8, cx: *mut u8) -> usize {
+        if CAPTURE.load(Ordering::Relaxed) {
+            capture_win_scan(window);
+        }
         if wrap_active() {
             let (cd, cv) = (CHILD_DATA.load(Ordering::Relaxed), CHILD_VT.load(Ordering::Relaxed));
             if cd == 0 || cv == 0 { return 0; }
@@ -776,6 +801,40 @@ mod native_element {
     }
 }
 
+// M2 capture: attached (FPUI_CAPTURE=1) to the request_layout candidates. The one whose x1 is a
+// real pointer is request_layout → log x0 (engine, for WIN_ENGINE_OFF) + 640B of the Style template.
+struct CaptureGate {
+    name: &'static str,
+    fired: AtomicBool,
+}
+impl InvocationListener for CaptureGate {
+    fn on_enter(&mut self, c: InvocationContext) {
+        if self.fired.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let ctx = c.cpu_context();
+        let regs: Vec<usize> = (0..8).map(|i| ctx.reg(i) as usize).collect();
+        eprintln!(
+            "[fpui-cap] {} x0..x7 = {}",
+            self.name,
+            regs.iter().map(|r| format!("{r:#x}")).collect::<Vec<_>>().join(" ")
+        );
+        // Dump the pointee of every arg that looks like a mapped pointer (stack or heap) — the gpui
+        // Style arg will show small enum/f32 bytes at offset 0, letting us pick the right reg + ABI.
+        for (i, &r) in regs.iter().enumerate() {
+            if (0x1_0000_0000..0x8000_0000_0000).contains(&r) && r % 4 == 0 {
+                let p = r as *const u8;
+                let mut s = String::with_capacity(128);
+                for k in 0..64usize {
+                    s.push_str(&format!("{:02x}", unsafe { p.add(k).read() }));
+                }
+                eprintln!("[fpui-cap]   x{i}={r:#x} -> {s}");
+            }
+        }
+    }
+    fn on_leave(&mut self, _c: InvocationContext) {}
+}
+
 fn install() -> Result<(), Box<dyn std::error::Error>> {
     let path = match std::env::var("FPUI_PAINT_ADAPTER") {
         Ok(path) => path,
@@ -881,6 +940,20 @@ fn install() -> Result<(), Box<dyn std::error::Error>> {
     // Capstone: also append a real `fpui` category to Zed's data-driven settings, via a
     // separate seam (detour settings_data, grow its returned Vec<SettingsPage>). Non-fatal.
     settings_category::attach(base, &mut interceptor);
+    // M2 capture gates (FPUI_CAPTURE=1): hook the 3 request_layout candidates (file offsets from
+    // the EXPECT_MESSAGE xref). The one with a pointer x1 is request_layout → logs engine + Style.
+    if std::env::var("FPUI_CAPTURE").is_ok() {
+        native_element::CAPTURE.store(true, Ordering::Relaxed);
+        for (name, off) in [("candA", 0x2266430usize), ("candB", 0x2280b3c), ("candC", 0x2315b68)] {
+            let gate: &'static mut CaptureGate =
+                Box::leak(Box::new(CaptureGate { name, fired: AtomicBool::new(false) }));
+            let addr = unsafe { base.add(off) };
+            match interceptor.attach(NativePointer(addr as *mut c_void), gate) {
+                Ok(_) => eprintln!("[fpui-cap] gate attached {name} @ {addr:p}"),
+                Err(e) => eprintln!("[fpui-cap] gate attach failed {name}: {e:?}"),
+            }
+        }
+    }
     // Hook and Gum must outlive every call into the dylib.
     Box::leak(Box::new((gum, interceptor)));
     eprintln!("paint-spike: armed entry={entry:p} mode={} rect={rect:?}", STATE.get().unwrap().mode);
