@@ -635,12 +635,10 @@ mod native_element {
 
     pub fn wrap_active() -> bool { MODE.load(Ordering::Relaxed) == 1 }
     pub fn standalone_ready() -> bool {
+        // candA takes the Window directly, so only the fn addr + Style template are needed.
         MODE.load(Ordering::Relaxed) == 2
             && ENGINE_REQ_LAYOUT.load(Ordering::Relaxed) != 0
             && STYLE.get().is_some()
-            && WIN_ENGINE_OFF.load(Ordering::Relaxed) != usize::MAX
-            && WIN_REM_OFF.load(Ordering::Relaxed) != usize::MAX
-            && WIN_SCALE_OFF.load(Ordering::Relaxed) != usize::MAX
     }
     pub fn active() -> bool { wrap_active() || standalone_ready() }
 
@@ -701,21 +699,30 @@ mod native_element {
             return f(cd as *mut u8, window, cx); // real child's LayoutId
         }
         if !standalone_ready() { return 0; }
-        // engine.request_layout(engine, &Style, rem, scale, &[]) -> LayoutId. The callee takes the
-        // Style by value + drops it, so hand it a fresh owned copy (template must be heap-free).
+        // candA(x0 = &{Style[632], &p1, &p2, &p3}, x1 = &Window) -> LayoutId (reversed 2026-11-10).
+        // candA reads two f32s via p1/p2 (the element dims) + a usize via p3, reads Window fields
+        // (scale @ Window+0x2280) itself, and makes a taffy leaf node.
         #[repr(C, align(16))]
-        struct Buf([u8; 1024]);
-        let style = STYLE.get().unwrap();
-        let mut buf = Buf([0; 1024]);
-        let n = style.len().min(1024);
-        std::ptr::copy_nonoverlapping(style.as_ptr(), buf.0.as_mut_ptr(), n);
-        let engine = (window.add(WIN_ENGINE_OFF.load(Ordering::Relaxed)) as *const usize).read_unaligned();
-        let rem = (window.add(WIN_REM_OFF.load(Ordering::Relaxed)) as *const f32).read_unaligned();
-        let scale = (window.add(WIN_SCALE_OFF.load(Ordering::Relaxed)) as *const f32).read_unaligned();
-        // C ABI: x0=engine, x1=&Style, s0=rem, s1=scale, x2=children.ptr, x3=children.len.
-        let f: unsafe extern "C" fn(usize, *const u8, f32, f32, *const u8, usize) -> usize =
-            std::mem::transmute(ENGINE_REQ_LAYOUT.load(Ordering::Relaxed));
-        f(engine, buf.0.as_ptr(), rem, scale, std::ptr::null(), 0)
+        struct CallStruct {
+            style: [u8; 632],
+            p1: *const f32,
+            p2: *const f32,
+            p3: *const usize,
+        }
+        let tmpl = STYLE.get().unwrap();
+        let w: f32 = 600.0; // card width  -> p1 (observed 178.0 for the sample element)
+        let h: f32 = 170.0; // card height -> p2 (observed 26.0)
+        let n: usize = 16; //  p3 (observed 0x10)
+        let mut cs = CallStruct { style: [0u8; 632], p1: &w, p2: &h, p3: &n };
+        let k = tmpl.len().min(632);
+        cs.style[..k].copy_from_slice(&tmpl[..k]);
+        let f: unsafe extern "C" fn(*const CallStruct, *mut u8) -> usize =
+            std::mem::transmute(ENGINE_REQ_LAYOUT.load(Ordering::Relaxed)); // = base + candA offset
+        let id = f(&cs, window);
+        if CAPTURE.load(Ordering::Relaxed) {
+            eprintln!("[fpui-native] candA returned LayoutId={id:#x}");
+        }
+        id
     }
 
     unsafe extern "C" fn el_prepaint(_self: *mut u8, window: *mut u8, cx: *mut u8) {
@@ -842,6 +849,19 @@ impl InvocationListener for CaptureGate {
                     s.push_str(&format!("{:02x}", unsafe { p.add(k).read() }));
                 }
                 eprintln!("[fpui-cap]   x{i}={r:#x} -> {s}");
+                // For candA x0 = &{Style[632], p1@632, p2@640, p3@648}: deref the 3 trailing ptrs
+                // to learn the measure/available-space values candA actually reads.
+                if i == 0 {
+                    for (lbl, off) in [("p1", 632usize), ("p2", 640), ("p3", 648)] {
+                        let pp = unsafe { (p.add(off) as *const usize).read() };
+                        if (0x1_0000_0000..0x8000_0000_0000).contains(&pp) && pp % 4 == 0 {
+                            let val = unsafe { (pp as *const u32).read() };
+                            eprintln!("[fpui-cap]     {lbl}@{off}={pp:#x} -> u32={val:#x} f32={}", f32::from_bits(val));
+                        } else {
+                            eprintln!("[fpui-cap]     {lbl}@{off}={pp:#x} (not a ptr)");
+                        }
+                    }
+                }
             }
         }
     }
