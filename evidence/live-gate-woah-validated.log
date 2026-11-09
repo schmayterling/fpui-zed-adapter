@@ -1,0 +1,34 @@
+/Users/may/Documents/ChatGPT/fpui-paint-inject/target/Zed.app: replacing existing signature
+paint-spike: source identity, private text hash, and entry verified
+paint-spike: main image base=0x104b34000
+paint-spike: paint_image armed at 0x106e64fd4
+[fpui-cat] attached settings_data @ 0x109a2b6dc image [0x104b34000,0x10f430000)
+paint-spike: armed entry=0x106e63d20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+paint-spike: main image base=0x100028000
+paint-spike: host hit=0 window=0x16b2c3488 bounds=[0.0, 0.0, 1467.0, 816.0] scale=2 quads=1
+paint-spike: host hit=1 window=0x16b2c3488 bounds=[0.0, 0.0, 1467.0, 816.0] scale=2 quads=5
+paint-spike: host hit=2 window=0x16b2c3488 bounds=[0.0, 816.0, 1467.0, 30.0] scale=2 quads=6
+paint-spike: host hit=3 window=0x16b2c3488 bounds=[28.0, 823.0, 1.0, 16.0] scale=2 quads=7
+paint-spike: host hit=4 window=0x7b64c37800 bounds=[0.0, 0.0, 1467.0, 34.0] scale=2 quads=1
+paint-spike: host hit=5 window=0x7b64c37800 bounds=[0.0, 34.0, 1467.0, 782.0] scale=2 quads=2
+paint-spike: paint_image armed at 0x102358fd4
+[fpui-cat] attached settings_data @ 0x104f1f6dc image [0x100028000,0x10a924000)
+paint-spike: armed entry=0x102357d20 mode=card rect=[360.0, 140.0, 240.0, 96.0]
+[fpui-cat] fpui items built: 4 (section headers + sub-pages), render=Some(109a73f1c)
+[fpui-cat] APPENDED fpui category: base=0x16b2c01c0 ptr_word=1 pages 15->16
+[fpui-cat] card gate attached on render fn 0x109a73f1c
+[fpui-gate] sub-page render fired: woah -> Support card (sw=0x7b63c19500)
+paint-spike: sprite block 128x128 id=0x6670756900000001 block=0x7b6614e820
+paint-spike: sprite block 286x43 id=0x6670756900000002 block=0x7b6614c5a0
+paint-spike: sprite block 594x28 id=0x6670756900000003 block=0x7b6614fde0
+paint-spike: sprite block 27x32 id=0x6670756900000004 block=0x7b6614c480
+paint-spike: sprite block 75x30 id=0x6670756900000005 block=0x7b6614d2c0
+paint-spike: woah/card frame=1 quad_delta=3 at=[272,150] prev_max=111
+paint-spike: woah/card frame=2 quad_delta=3 at=[272,150] prev_max=111
+paint-spike: woah/card frame=3 quad_delta=3 at=[272,150] prev_max=108
+paint-spike: woah/card frame=4 quad_delta=3 at=[272,150] prev_max=111
+paint-spike: woah/card frame=8 quad_delta=3 at=[272,150] prev_max=111
+paint-spike: woah/card frame=16 quad_delta=3 at=[272,150] prev_max=111
+paint-spike: woah/card frame=32 quad_delta=3 at=[272,150] prev_max=110
+paint-spike: woah/card frame=64 quad_delta=3 at=[272,150] prev_max=105
+paint-spike: woah/card frame=128 quad_delta=3 at=[272,150] prev_max=110
