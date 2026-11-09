@@ -13,7 +13,7 @@
   "quads_vec_offset": 176,
   "paint_ops_vec_offset": 104,
   "scale_offset": 8832,
-  "native_mode": 0,
+  "native_mode": 1,
   "native_engine_req_layout_offset": 0,
   "native_style_hex": "",
   "native_win_engine_off": 0,
