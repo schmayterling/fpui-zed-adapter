@@ -614,6 +614,7 @@ mod native_element {
     pub static CAPTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     pub static ENG_CAP: AtomicUsize = AtomicUsize::new(0);
     static WIN_OFF_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    static VT_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
     // In capture mode, once the CaptureGate has the engine ptr, scan our `window` arg for it to
     // resolve WIN_ENGINE_OFF (the Window offset holding the layout_engine Box ptr).
@@ -795,6 +796,16 @@ mod native_element {
         let (data_idx, valid_idx) = if vt_idx == 1 { (0, 2) } else { (1, 0) };
         CHILD_DATA.store(words[data_idx], Ordering::Relaxed);
         CHILD_VT.store(words[vt_idx], Ordering::Relaxed);
+        // M2 path B: log the real child's vtable once. [4]=Drawable::request_layout is the trace
+        // entry to window.request_layout (the gpui-Style-taking fn we need to locate).
+        if CAPTURE.load(Ordering::Relaxed) && !VT_LOGGED.swap(true, Ordering::Relaxed) {
+            let vt = words[vt_idx];
+            let mut s = String::new();
+            for i in 0..8 {
+                s.push_str(&format!(" [{i}]={:#x}", (vt as *const usize).add(i).read()));
+            }
+            eprintln!("[fpui-cap] child vtable @{vt:#x} data={:#x}:{s}", words[data_idx]);
+        }
         w.add(data_idx).write(&ELEM_MARKER as *const u8 as usize);
         w.add(vt_idx).write(&VTABLE as *const Vtable as usize);
         w.add(valid_idx).write(FAKE_VALID.0.get() as usize);
@@ -951,6 +962,22 @@ fn install() -> Result<(), Box<dyn std::error::Error>> {
             match interceptor.attach(NativePointer(addr as *mut c_void), gate) {
                 Ok(_) => eprintln!("[fpui-cap] gate attached {name} @ {addr:p}"),
                 Err(e) => eprintln!("[fpui-cap] gate attach failed {name}: {e:?}"),
+            }
+        }
+    }
+    // M2 path B trace: FPUI_TRACE=<hex file offset> attaches an arg-dump gate at base+offset, so
+    // the Style-build / window.request_layout chain can be walked by relaunch alone (no rebuild).
+    if let Ok(v) = std::env::var("FPUI_TRACE") {
+        for tok in v.split(',') {
+            if let Ok(off) = usize::from_str_radix(tok.trim().trim_start_matches("0x"), 16) {
+                let name: &'static str = Box::leak(format!("TRACE@{off:#x}").into_boxed_str());
+                let gate: &'static mut CaptureGate =
+                    Box::leak(Box::new(CaptureGate { name, fired: AtomicBool::new(false) }));
+                let addr = unsafe { base.add(off) };
+                match interceptor.attach(NativePointer(addr as *mut c_void), gate) {
+                    Ok(_) => eprintln!("[fpui-cap] trace gate @ {addr:p} (off {off:#x})"),
+                    Err(e) => eprintln!("[fpui-cap] trace gate failed {off:#x}: {e:?}"),
+                }
             }
         }
     }
